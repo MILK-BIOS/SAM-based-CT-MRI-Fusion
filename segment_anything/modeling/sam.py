@@ -7,12 +7,13 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+import numpy as np
+from typing import Any, Dict, List, Tuple, Optional
 
-from typing import Any, Dict, List, Tuple
-
-from .image_encoder import ImageEncoderViT
-from .mask_decoder import MaskDecoder
+from .image_encoder import ImageEncoderViT, SiameseImageEncoder
+from .mask_decoder import MaskDecoder, SiameseMaskDecoder
 from .prompt_encoder import PromptEncoder
+from .class_decoder import ClassDecoder
 
 
 class Sam(nn.Module):
@@ -172,3 +173,92 @@ class Sam(nn.Module):
         padw = self.image_encoder.img_size - w
         x = F.pad(x, (0, padw, 0, padh))
         return x
+
+
+class SiameseSam(nn.Module):
+    def __init__(self,
+                 image_encoder: SiameseImageEncoder,
+                 prompt_encoder: PromptEncoder,
+                 mask_decoder: SiameseMaskDecoder,
+                 class_decoder: ClassDecoder,
+                 pixel_mean: List[float] = [123.675, 116.28, 103.53],
+                 pixel_std: List[float] = [58.395, 57.12, 57.375]):
+        super().__init__()
+        self.image_encoder = image_encoder
+        self.prompt_encoder = prompt_encoder
+        self.mask_decoder = mask_decoder
+        self.class_decoder = class_decoder
+        self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
+        self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
+
+    @property
+    def device(self) -> Any:
+        return self.pixel_mean.device
+
+    def forward(self,
+                CT_input: torch.Tensor,
+                MRI_input: torch.Tensor,
+                points: Optional[Tuple[np.ndarray, np.ndarray]],
+                boxes: Optional[np.ndarray] = None,
+                mask_inputs: Optional[np.ndarray] = None,
+                multimask_output: bool = False) -> List[torch.Tensor]:
+        input_images_CT = torch.stack([self.preprocess(x["image"]) for x in CT_input], dim=0)
+        image_embeddings_CT = self.image_encoder(input_images_CT)
+        input_images_MRI = torch.stack([self.preprocess(x["image"]) for x in MRI_input], dim=0)
+        image_embeddings_MRI = self.image_encoder(input_images_MRI)
+
+        outputs = []
+        CT_label = self.class_decoder(image_embeddings_CT)
+        MRI_label = self.class_decoder(image_embeddings_MRI)
+        outputs.append(CT_label)
+        outputs.append(MRI_label)
+        sparse_embeddings, dense_embeddings = self.prompt_encoder(
+            points=points,
+            boxes=boxes,
+            masks=mask_inputs
+        )
+        low_res_masks, iou_predictions = self.mask_decoder(
+            CT_image_embeddings=image_embeddings_CT.unsqueeze(0),
+            MRI_image_embeddings=image_embeddings_MRI.unsqueeze(0),
+            image_pe=self.prompt_encoder.get_dense_pe(),
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=multimask_output,
+        )
+        masks = self.postprocess_masks(
+            low_res_masks,
+            input_size=CT_input.shape[-2:],
+        )
+        outputs.append(masks)
+        outputs.append(image_embeddings_CT)
+        outputs.append(image_embeddings_MRI)
+        return outputs
+
+    def preprocess(self, x: torch.Tensor) -> torch.Tensor:
+        """Normalize pixel values and pad to a square input."""
+        # Normalize colors
+        x = (x - self.pixel_mean) / self.pixel_std
+
+        # Pad
+        h, w = x.shape[-2:]
+        padh = self.image_encoder.img_size - h
+        padw = self.image_encoder.img_size - w
+        x = F.pad(x, (0, padw, 0, padh))
+        return x
+    
+    def postprocess_masks(
+        self,
+        masks: torch.Tensor,
+        input_size: Tuple[int, ...],
+        original_size: Tuple[int, ...] = (256, 256),
+    ) -> torch.Tensor:
+
+        masks = F.interpolate(
+            masks,
+            (self.image_encoder.img_size, self.image_encoder.img_size),
+            mode="bilinear",
+            align_corners=False,
+        )
+        masks = masks[..., : input_size[0], : input_size[1]]
+        masks = F.interpolate(masks, original_size, mode="bilinear", align_corners=False)
+        return masks

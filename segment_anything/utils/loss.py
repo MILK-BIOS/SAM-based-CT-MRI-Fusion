@@ -27,22 +27,24 @@ class ContrasiveStructureLoss(nn.Module):
         self.illumination_loss = IlluminationLoss()
 
     def forward(self, 
-                pred: Tensor, 
+                CT_pred: Tensor, 
+                MRI_pred:Tensor,
                 merged: Tensor, 
-                origin_CT: Tensor, 
-                origin_MRI: Tensor, 
-                target: Tensor, 
                 encoded_CT: Tensor, 
                 encoded_MRI: Tensor, 
-                is_same_class: bool):
+                CT_target: Tensor,
+                MRI_target: Tensor,
+                origin_CT: Tensor, 
+                origin_MRI: Tensor):
         # SSIM
         ssim_loss_CT = self.ssim_loss(origin_CT, merged)
         ssim_loss_MRI = self.ssim_loss(origin_MRI, merged)
 
         # Cross Entropy Loss
-        classification_loss = self.classification_loss(pred, target)
+        classification_loss = self.classification_loss(CT_pred, CT_target) + self.classification_loss(MRI_pred, MRI_target)
 
         # Contrasive Loss
+        is_same_class = (CT_target == MRI_target)
         contrasive_loss = self.contrasive_loss(encoded_CT, encoded_MRI, is_same_class)
 
         # Illumination Loss
