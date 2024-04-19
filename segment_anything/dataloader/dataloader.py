@@ -1,5 +1,6 @@
 import cv2
 import os
+from tqdm import tqdm
 import numpy as np
 from torch.utils.data import Dataset
 from torchvision import transforms
@@ -16,12 +17,13 @@ class MedicalDataset(Dataset):
         self.dataset = []
         self.label = []
 
-        for label in os.listdir(root):
+        for label in tqdm(os.listdir(root)):
             label_path = os.path.join(root, label)
             for instance in os.listdir(label_path):
                 instance_path = os.path.join(label_path, instance)
                 instance = {}
                 for mode in os.listdir(instance_path):
+                    instance.setdefault(mode, [])
                     mode_path = os.path.join(instance_path, mode)
                     for file_name in os.listdir(mode_path):
 
@@ -43,37 +45,34 @@ class MedicalDataset(Dataset):
                 self.dataset.append(instance)
 
         self.data = []
+        self.label_map = {}
         for idx, instance in enumerate(self.dataset):
             instance_mod1 = instance.get(mod1, None)
             instance_mod2 = instance.get(mod2, None)
             if not (instance_mod1 and instance_mod2):
                 continue
             assert instance.get('label', None), 'Failed to find label'
-            
+            if not self.label_map.get(instance['label'], None):
+                self.label_map[instance['label']] = len(self.label_map)
             # make combination of mode from the same class
             for i in range(len(instance_mod1)):
                 for j in range(len(instance_mod2)):
-                    self.data.append([instance_mod1[i], instance_mod2[j]])
-                    self.label.append([instance[label], instance[label]])
+                    self.data.extend((x, y) for x, y in zip(instance_mod1[i], instance_mod2[j]))
+                    self.label.extend((self.label_map[instance['label']], self.label_map[instance['label']]) for _ in instance_mod1[i])
 
             #TODO: make combination of mode from different class
+        print('Catagory: ', self.label_map)
+        self.num_classes = len(self.label_map)
 
     def __getitem__(self, index):
         modal_images = self.data[index]
-        labels = self.data[index]
+        labels = self.label[index]
         transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor()
+            transforms.ToTensor(),
+            transforms.Resize((256, 256))
         ])
         modal_images = [transform(img) for img in modal_images]
         return modal_images, labels
     
-    @property
-    def num_classes(self):
-        num = np.unique(self.label)
-        return len(num)
-
-
-        
-                
-                
+    def __len__(self):
+        return len(self.label)

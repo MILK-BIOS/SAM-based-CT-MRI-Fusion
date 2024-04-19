@@ -16,12 +16,8 @@ class ContrasiveStructureLoss(nn.Module):
                  reduction='mean'):
         super().__init__()
         self.ssim_loss = SSIM(data_range=data_range, 
-                             win_size=win_size, 
-                             win_sigma=win_sigma, 
                              k1=k1, 
-                             k2=k2, 
-                             eps=eps, 
-                             reduction=reduction)
+                             k2=k2)
         self.classification_loss = nn.CrossEntropyLoss()
         self.contrasive_loss = ContrasiveLoss()
         self.illumination_loss = IlluminationLoss()
@@ -44,7 +40,7 @@ class ContrasiveStructureLoss(nn.Module):
         classification_loss = self.classification_loss(CT_pred, CT_target) + self.classification_loss(MRI_pred, MRI_target)
 
         # Contrasive Loss
-        is_same_class = (CT_target == MRI_target)
+        is_same_class = (CT_target == MRI_target).float()
         contrasive_loss = self.contrasive_loss(encoded_CT, encoded_MRI, is_same_class)
 
         # Illumination Loss
@@ -60,8 +56,12 @@ class ContrasiveLoss(nn.Module):
         self.threshold = threshold
 
     def forward(self, encoded_CT, encoded_MRI, is_same_class):
-        dis = torch.dist(encoded_CT, encoded_MRI) ** 2
-        loss = is_same_class * dis + (1 - is_same_class) * max(self.threshold - dis, 0)
+        is_same_class = is_same_class.int()
+        encoded_CT = encoded_CT.view(encoded_CT.shape[0], -1)
+        encoded_MRI = encoded_MRI.view(encoded_MRI.shape[0], -1)
+        dis = torch.norm(encoded_CT-encoded_MRI, dim=1, p=2) ** 2
+        loss = is_same_class * dis +  (1 - is_same_class) * torch.max(self.threshold - dis, torch.zeros(len(dis)))
+        loss = torch.mean(loss)
         return loss
     
 
@@ -70,7 +70,7 @@ class IlluminationLoss(nn.Module):
         super().__init__()
 
     def forward(self, x: Tensor):
-        assert x.shape == 4, f'Expect x to be a 4d tensor but got {len(x.shape)}d'
+        assert len(x.shape) == 4, f'Expect x to be a 4d tensor but got {len(x.shape)}d'
         B, C, H, W = x.shape
         count_h = (H - 1) * W
         count_w = H * (W - 1)

@@ -10,7 +10,8 @@ from .build_sam import (
     build_sam_vit_l,
     build_sam_vit_b,
     sam_model_registry,
+    build_siamese_sam
 )
 from .predictor import SamPredictor
 from .automatic_mask_generator import SamAutomaticMaskGenerator
-from .dataloader import dataloader
+from .dataloader import MedicalDataset

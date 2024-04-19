@@ -8,16 +8,16 @@ import torch
 
 from functools import partial
 
-from .modeling import ImageEncoderViT, MaskDecoder, PromptEncoder, Sam, TwoWayTransformer, SiameseSam, ClassDecoder
+from .modeling import ImageEncoderViT, MaskDecoder, PromptEncoder, Sam, TwoWayTransformer, SiameseSam, ClassDecoder, SiameseMaskDecoder
 
 
-def build_siamese_sam(checkpoint=None):
+def build_siamese_sam(num_classes=3, checkpoint=None):
     return _build_siamese_sam(
         encoder_embed_dim=1280,
         encoder_depth=32,
         encoder_num_heads=16,
         encoder_global_attn_indexes=[7, 15, 23, 31],
-        num_classes = 3,
+        num_classes=num_classes,
         checkpoint=checkpoint,
     )
 
@@ -147,7 +147,7 @@ def _build_siamese_sam(encoder_embed_dim,
             input_image_size=(image_size, image_size),
             mask_in_chans=16,
         ),
-        mask_decoder=MaskDecoder(
+        mask_decoder=SiameseMaskDecoder(
             num_multimask_outputs=3,
             transformer=TwoWayTransformer(
                 depth=2,
@@ -159,7 +159,7 @@ def _build_siamese_sam(encoder_embed_dim,
             iou_head_depth=3,
             iou_head_hidden_dim=256,
         ),
-        class_decoder=ClassDecoder(prompt_embed_dim, num_classes),
+        class_decoder=ClassDecoder(prompt_embed_dim*vit_patch_size*vit_patch_size, num_classes),
         pixel_mean=[123.675, 116.28, 103.53],
         pixel_std=[58.395, 57.12, 57.375],
     )

@@ -196,15 +196,15 @@ class SiameseSam(nn.Module):
         return self.pixel_mean.device
 
     def forward(self,
-                CT_input: torch.Tensor,
-                MRI_input: torch.Tensor,
-                points: Optional[Tuple[np.ndarray, np.ndarray]],
+                input: List[torch.Tensor],
+                points: Optional[Tuple[np.ndarray, np.ndarray]] = None,
                 boxes: Optional[np.ndarray] = None,
                 mask_inputs: Optional[np.ndarray] = None,
-                multimask_output: bool = False) -> List[torch.Tensor]:
-        input_images_CT = torch.stack([self.preprocess(x["image"]) for x in CT_input], dim=0)
+                multimask_output: int = 3) -> List[torch.Tensor]:
+        CT_input, MRI_input = input
+        input_images_CT = torch.stack([self.preprocess(x) for x in CT_input], dim=0)
         image_embeddings_CT = self.image_encoder(input_images_CT)
-        input_images_MRI = torch.stack([self.preprocess(x["image"]) for x in MRI_input], dim=0)
+        input_images_MRI = torch.stack([self.preprocess(x) for x in MRI_input], dim=0)
         image_embeddings_MRI = self.image_encoder(input_images_MRI)
 
         outputs = []
