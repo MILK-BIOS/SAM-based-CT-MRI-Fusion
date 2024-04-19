@@ -16,6 +16,7 @@ class MedicalDataset(Dataset):
         self.classes = os.listdir(root)
         self.dataset = []
         self.label = []
+        self.label_instace = {}
 
         for label in tqdm(os.listdir(root)):
             label_path = os.path.join(root, label)
@@ -46,6 +47,7 @@ class MedicalDataset(Dataset):
 
         self.data = []
         self.label_map = {}
+        
         for idx, instance in enumerate(self.dataset):
             instance_mod1 = instance.get(mod1, None)
             instance_mod2 = instance.get(mod2, None)
@@ -63,6 +65,28 @@ class MedicalDataset(Dataset):
             #TODO: make combination of mode from different class
         print('Catagory: ', self.label_map)
         self.num_classes = len(self.label_map)
+
+        key_combinations = []
+        for key1 in self.label_map.keys():
+            for key2 in self.label_map.keys():
+                if key1 != key2:
+                    key_combinations.append((key1, key2))
+
+        for cls1, cls2 in key_combinations:
+            for instance1 in self.dataset:
+                for instance2 in self.dataset:
+                    if instance1['label'] == cls1 and instance2['label'] == cls2 and instance1.get(mod1, None) and instance2.get(mod2, None):
+                        for CT_img in instance1[mod1]:
+                            for MRI_img in instance2[mod2]:
+                                if len(CT_img) > len(MRI_img):
+                                    CT_img = CT_img[:len(MRI_img)]
+                                elif len(CT_img) < len(MRI_img):
+                                    MRI_img = MRI_img[:len(CT_img)]                    
+                                self.data.extend((x, y) for x, y in zip(CT_img, MRI_img))
+                                self.label.extend((self.label_map[instance1['label']], self.label_map[instance2['label']]) for _ in instance1[mod1])
+
+
+        
 
     def __getitem__(self, index):
         modal_images = self.data[index]

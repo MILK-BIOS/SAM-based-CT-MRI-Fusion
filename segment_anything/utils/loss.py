@@ -13,11 +13,13 @@ class ContrasiveStructureLoss(nn.Module):
                  k1=0.01, 
                  k2=0.03, 
                  eps=1e-8, 
-                 reduction='mean'):
+                 reduction='mean',
+                 device='cuda'):
         super().__init__()
+        self.device = device
         self.ssim_loss = SSIM(data_range=data_range, 
                              k1=k1, 
-                             k2=k2)
+                             k2=k2).to(device)
         self.classification_loss = nn.CrossEntropyLoss()
         self.contrasive_loss = ContrasiveLoss()
         self.illumination_loss = IlluminationLoss()
@@ -41,7 +43,7 @@ class ContrasiveStructureLoss(nn.Module):
 
         # Contrasive Loss
         is_same_class = (CT_target == MRI_target).float()
-        contrasive_loss = self.contrasive_loss(encoded_CT, encoded_MRI, is_same_class)
+        contrasive_loss = self.contrasive_loss(encoded_CT, encoded_MRI, is_same_class, self.device)
 
         # Illumination Loss
         illuminationLoss = self.illumination_loss(merged)
@@ -55,12 +57,12 @@ class ContrasiveLoss(nn.Module):
         super().__init__()
         self.threshold = threshold
 
-    def forward(self, encoded_CT, encoded_MRI, is_same_class):
+    def forward(self, encoded_CT, encoded_MRI, is_same_class, device='cuda'):
         is_same_class = is_same_class.int()
         encoded_CT = encoded_CT.view(encoded_CT.shape[0], -1)
         encoded_MRI = encoded_MRI.view(encoded_MRI.shape[0], -1)
         dis = torch.norm(encoded_CT-encoded_MRI, dim=1, p=2) ** 2
-        loss = is_same_class * dis +  (1 - is_same_class) * torch.max(self.threshold - dis, torch.zeros(len(dis)))
+        loss = is_same_class * dis +  (1 - is_same_class) * torch.max(self.threshold - dis, torch.zeros(len(dis)).to(device))
         loss = torch.mean(loss)
         return loss
     
