@@ -200,7 +200,7 @@ class SiameseSam(nn.Module):
                 points: Optional[Tuple[np.ndarray, np.ndarray]] = None,
                 boxes: Optional[np.ndarray] = None,
                 mask_inputs: Optional[np.ndarray] = None,
-                multimask_output: int = 3) -> List[torch.Tensor]:
+                multimask_output: int = 1) -> List[torch.Tensor]:
         CT_input, MRI_input = input
         input_images_CT = torch.stack([self.preprocess(x) for x in CT_input], dim=0)
         image_embeddings_CT = self.image_encoder(input_images_CT)
@@ -232,6 +232,7 @@ class SiameseSam(nn.Module):
         outputs.append(masks)
         outputs.append(image_embeddings_CT)
         outputs.append(image_embeddings_MRI)
+
         return outputs
 
     def preprocess(self, x: torch.Tensor) -> torch.Tensor:

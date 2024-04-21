@@ -7,8 +7,8 @@ from segment_anything.utils import ContrasiveStructureLoss
 
 if __name__ == '__main__':
     epochs = 100
-    batch_size = 2
-    lr = 1e-5
+    batch_size = 64
+    lr = 1e-3
     device = "cuda"
 
     print('-'*15,'Loading Data','-'*15)
@@ -21,11 +21,14 @@ if __name__ == '__main__':
     SiameseSAM = torch.nn.DataParallel(SiameseSAM, [0,1,2,3])
 
     criterion = ContrasiveStructureLoss(device=device)
-    optimizer = torch.optim.SGD(SiameseSAM.parameters(), lr=0.001, momentum=0.9)
+    optimizer = torch.optim.SGD(SiameseSAM.parameters(), lr=lr, momentum=0.9)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20], gamma=0.1)
+
     print('Finished!')
     print('-'*15,'Training','-'*15)
     best_loss = 1.9
     for epoch in range(epochs):
+        mean_loss = 0
         for inputs, labels in tqdm(data_loader):
             inputs, labels = [x.to(device) for x in inputs], [y.to(device) for y in labels]
             optimizer.zero_grad()
@@ -44,10 +47,13 @@ if __name__ == '__main__':
                              origin_MRI=inputs[1])
             loss.backward()
             optimizer.step()
-        
-        print(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item()}")
+            mean_loss += loss.item()
+        scheduler.step()
+        mean_loss /= len(data_loader)
+        print(f"Epoch {epoch+1}/{epochs}, Loss: {mean_loss}")
         if (loss < best_loss):
             torch.save(SiameseSAM.state_dict(), f'model/SiameseSAM_best_epoch{epoch+1}.pth')
             best_loss = loss
+            print('Best Loss: ', best_loss)
         if (epoch % 5 == 0):
             torch.save(SiameseSAM.state_dict(), f'model/SiameseSAM_epoch{epoch+1}.pth')

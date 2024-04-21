@@ -13,10 +13,10 @@ from .modeling import ImageEncoderViT, MaskDecoder, PromptEncoder, Sam, TwoWayTr
 
 def build_siamese_sam(num_classes=3, checkpoint=None):
     return _build_siamese_sam(
-        encoder_embed_dim=1280,
-        encoder_depth=32,
-        encoder_num_heads=16,
-        encoder_global_attn_indexes=[7, 15, 23, 31],
+        encoder_embed_dim=768,
+        encoder_depth=12,
+        encoder_num_heads=12,
+        encoder_global_attn_indexes=[2, 5, 8, 11],
         num_classes=num_classes,
         checkpoint=checkpoint,
     )
@@ -165,7 +165,12 @@ def _build_siamese_sam(encoder_embed_dim,
     )
     sam.eval()
     if checkpoint is not None:
+        new_state_dict = {}
         with open(checkpoint, "rb") as f:
-            state_dict = torch.load(f)
-        sam.load_state_dict(state_dict)
+            state_dict = torch.load(f)        
+            for k, v in state_dict.items():
+                new_k = k.replace('module.', '') if 'module' in k else k
+                new_state_dict[new_k] = v
+
+        sam.load_state_dict(new_state_dict)
     return sam

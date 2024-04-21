@@ -35,8 +35,8 @@ class ContrasiveStructureLoss(nn.Module):
                 origin_CT: Tensor, 
                 origin_MRI: Tensor):
         # SSIM
-        ssim_loss_CT = self.ssim_loss(origin_CT, merged)
-        ssim_loss_MRI = self.ssim_loss(origin_MRI, merged)
+        ssim_loss_CT = 1 - self.ssim_loss(origin_CT, merged)
+        ssim_loss_MRI = 1 - self.ssim_loss(origin_MRI, merged)
 
         # Cross Entropy Loss
         classification_loss = self.classification_loss(CT_pred, CT_target) + self.classification_loss(MRI_pred, MRI_target)
@@ -53,7 +53,7 @@ class ContrasiveStructureLoss(nn.Module):
     
 
 class ContrasiveLoss(nn.Module):
-    def __init__(self, threshold: int=5000):
+    def __init__(self, threshold: int=10):
         super().__init__()
         self.threshold = threshold
 
@@ -61,8 +61,10 @@ class ContrasiveLoss(nn.Module):
         is_same_class = is_same_class.int()
         encoded_CT = encoded_CT.view(encoded_CT.shape[0], -1)
         encoded_MRI = encoded_MRI.view(encoded_MRI.shape[0], -1)
-        dis = torch.norm(encoded_CT-encoded_MRI, dim=1, p=2) ** 2
-        loss = is_same_class * dis +  (1 - is_same_class) * torch.max(self.threshold - dis, torch.zeros(len(dis)).to(device))
+        dis_CT = torch.norm(encoded_CT, dim=1, p=2) ** 2
+        dis_MRI = torch.norm(encoded_MRI, dim=1, p=2) ** 2
+        dis = torch.norm(encoded_CT-encoded_MRI, dim=1, p=1) ** 2
+        loss = is_same_class * dis +  (1 - is_same_class) * torch.max(self.threshold - dis, torch.zeros(len(dis)).to(device)) + torch.max(25-dis_CT, torch.zeros(len(dis)).to(device)) + torch.max(25-dis_MRI, torch.zeros(len(dis)).to(device))
         loss = torch.mean(loss)
         return loss
     
@@ -78,5 +80,5 @@ class IlluminationLoss(nn.Module):
         count_w = H * (W - 1)
         h_tv = torch.pow((x[:,:,1:,:]-x[:,:,:H-1,:]),2).sum()
         w_tv = torch.pow((x[:,:,:,1:]-x[:,:,:,:W-1]),2).sum()
-        loss = 2*(h_tv/count_h + w_tv/count_w) / B
+        loss = (h_tv/count_h + w_tv/count_w) / B + max(0.5 - torch.mean(x), 0)
         return loss

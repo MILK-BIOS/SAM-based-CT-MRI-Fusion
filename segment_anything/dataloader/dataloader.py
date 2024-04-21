@@ -2,6 +2,7 @@ import cv2
 import os
 from tqdm import tqdm
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
 
@@ -84,9 +85,6 @@ class MedicalDataset(Dataset):
                                     MRI_img = MRI_img[:len(CT_img)]                    
                                 self.data.extend((x, y) for x, y in zip(CT_img, MRI_img))
                                 self.label.extend((self.label_map[instance1['label']], self.label_map[instance2['label']]) for _ in instance1[mod1])
-
-
-        
 
     def __getitem__(self, index):
         modal_images = self.data[index]
