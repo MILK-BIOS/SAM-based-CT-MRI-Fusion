@@ -7,7 +7,7 @@ from segment_anything.utils import ContrasiveStructureLoss
 
 if __name__ == '__main__':
     epochs = 100
-    batch_size = 64
+    batch_size = 32
     lr = 1e-3
     device = "cuda"
 
@@ -17,12 +17,13 @@ if __name__ == '__main__':
     data_loader = torch.utils.data.DataLoader(medical_dataset, batch_size=batch_size, shuffle=True)
     print('Finished!')
     print('-'*15,'Init Model','-'*15)
-    SiameseSAM = build_siamese_sam(num_classes=num_classes, checkpoint=None).to(device)
+    SiameseSAM = build_siamese_sam(num_classes=num_classes, checkpoint='model/SiameseSAM_epoch11.pth').to(device)
     SiameseSAM = torch.nn.DataParallel(SiameseSAM, [0,1,2,3])
 
     criterion = ContrasiveStructureLoss(device=device)
-    optimizer = torch.optim.SGD(SiameseSAM.parameters(), lr=lr, momentum=0.9)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20], gamma=0.1)
+    optimizer = torch.optim.Adam(SiameseSAM.parameters(), lr=lr)
+    # optimizer = torch.optim.SGD(SiameseSAM.parameters(), lr=lr, momentum=0.9)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20,30,80], gamma=0.1)
 
     print('Finished!')
     print('-'*15,'Training','-'*15)
@@ -48,6 +49,8 @@ if __name__ == '__main__':
             loss.backward()
             optimizer.step()
             mean_loss += loss.item()
+            # for param in SiameseSAM.parameters():
+            #     print(param.grad)
         scheduler.step()
         mean_loss /= len(data_loader)
         print(f"Epoch {epoch+1}/{epochs}, Loss: {mean_loss}")
@@ -55,5 +58,5 @@ if __name__ == '__main__':
             torch.save(SiameseSAM.state_dict(), f'model/SiameseSAM_best_epoch{epoch+1}.pth')
             best_loss = loss
             print('Best Loss: ', best_loss)
-        if (epoch % 5 == 0):
+        if ((epoch+1) % 5 == 0):
             torch.save(SiameseSAM.state_dict(), f'model/SiameseSAM_epoch{epoch+1}.pth')

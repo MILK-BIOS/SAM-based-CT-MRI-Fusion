@@ -48,7 +48,7 @@ class ContrasiveStructureLoss(nn.Module):
         # Illumination Loss
         illuminationLoss = self.illumination_loss(merged)
 
-        loss = ssim_loss_CT + ssim_loss_MRI + classification_loss + contrasive_loss + illuminationLoss
+        loss = 2 * ssim_loss_CT + 2 * ssim_loss_MRI + classification_loss + 0.1 * contrasive_loss + 0.05 * illuminationLoss
         return loss
     
 
@@ -64,7 +64,7 @@ class ContrasiveLoss(nn.Module):
         dis_CT = torch.norm(encoded_CT, dim=1, p=2) ** 2
         dis_MRI = torch.norm(encoded_MRI, dim=1, p=2) ** 2
         dis = torch.norm(encoded_CT-encoded_MRI, dim=1, p=1) ** 2
-        loss = is_same_class * dis +  (1 - is_same_class) * torch.max(self.threshold - dis, torch.zeros(len(dis)).to(device)) + torch.max(25-dis_CT, torch.zeros(len(dis)).to(device)) + torch.max(25-dis_MRI, torch.zeros(len(dis)).to(device))
+        loss = is_same_class * dis +  2 * (1 - is_same_class) * torch.max(self.threshold - dis, torch.zeros(len(dis)).to(device)) + torch.max(25-dis_CT, torch.zeros(len(dis)).to(device)) + torch.max(25-dis_MRI, torch.zeros(len(dis)).to(device))
         loss = torch.mean(loss)
         return loss
     
