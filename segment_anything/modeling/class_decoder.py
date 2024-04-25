@@ -10,7 +10,7 @@ class ClassDecoder(nn.Module):
         self.fc3 = nn.Linear(hidden_dim, hidden_dim)
         self.fc4 = nn.Linear(hidden_dim, out_dim)
         self.conv1 = nn.Conv2d(256, 3, kernel_size=1, stride=1, padding=0)
-        self.relu = nn.GELU()
+        self.relu = nn.LeakyReLU()
         self.norm = nn.BatchNorm1d(128)
         self.softmax = nn.Softmax(dim=0)
 

@@ -226,10 +226,6 @@ class SiameseMaskDecoder(nn.Module):
             ]
         )
 
-        self.iou_prediction_head = MLP(
-            transformer_dim, iou_head_hidden_dim, self.num_mask_tokens, iou_head_depth
-        )
-
     def forward(
         self,
         CT_image_embeddings: torch.Tensor,
@@ -254,8 +250,8 @@ class SiameseMaskDecoder(nn.Module):
           torch.Tensor: batched predicted masks
           torch.Tensor: batched predictions of mask quality
         """
-        image_embeddings = 0.4 * CT_image_embeddings + 0.6 * MRI_image_embeddings
-        masks, iou_pred = self.predict_masks(
+        image_embeddings = torch.cat([CT_image_embeddings, MRI_image_embeddings], dim=2)
+        masks = self.predict_masks(
             image_embeddings=image_embeddings,
             image_pe=image_pe,
             sparse_prompt_embeddings=sparse_prompt_embeddings,
@@ -268,10 +264,9 @@ class SiameseMaskDecoder(nn.Module):
         else:
             mask_slice = slice(0, 1)
         masks = masks[:, mask_slice, :, :]
-        iou_pred = iou_pred[:, mask_slice]
 
         # Prepare output
-        return masks, iou_pred
+        return masks
 
     def predict_masks(
         self,
@@ -309,6 +304,5 @@ class SiameseMaskDecoder(nn.Module):
         masks = (hyper_in @ upscaled_embedding.view(b, c, h * w)).view(b, -1, h, w)
 
         # Generate mask quality predictions
-        iou_pred = self.iou_prediction_head(iou_token_out)
 
-        return masks, iou_pred
+        return masks

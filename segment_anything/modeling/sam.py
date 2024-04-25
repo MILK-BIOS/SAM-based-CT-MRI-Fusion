@@ -181,8 +181,8 @@ class SiameseSam(nn.Module):
                  prompt_encoder: PromptEncoder,
                  mask_decoder: SiameseMaskDecoder,
                  class_decoder: ClassDecoder,
-                 pixel_mean: List[float] = [123.675, 116.28, 103.53],
-                 pixel_std: List[float] = [58.395, 57.12, 57.375]):
+                 pixel_mean: List[float] = [86.8950], # 123.675, 116.28, 103.53
+                 pixel_std: List[float] = [134.4275]): # 58.395, 57.12, 57.375
         super().__init__()
         self.image_encoder = image_encoder
         self.prompt_encoder = prompt_encoder
@@ -202,6 +202,7 @@ class SiameseSam(nn.Module):
                 mask_inputs: Optional[np.ndarray] = None,
                 multimask_output: int = 1) -> List[torch.Tensor]:
         CT_input, MRI_input = input
+        # shortcut = (CT_input + MRI_input) / 2
         input_images_CT = torch.stack([self.preprocess(x) for x in CT_input], dim=0)
         image_embeddings_CT = self.image_encoder(input_images_CT)
         input_images_MRI = torch.stack([self.preprocess(x) for x in MRI_input], dim=0)
@@ -217,7 +218,7 @@ class SiameseSam(nn.Module):
             boxes=boxes,
             masks=mask_inputs
         )
-        low_res_masks, iou_predictions = self.mask_decoder(
+        low_res_masks = self.mask_decoder(
             CT_image_embeddings=image_embeddings_CT.unsqueeze(0),
             MRI_image_embeddings=image_embeddings_MRI.unsqueeze(0),
             image_pe=self.prompt_encoder.get_dense_pe(),
@@ -225,10 +226,12 @@ class SiameseSam(nn.Module):
             dense_prompt_embeddings=dense_embeddings,
             multimask_output=multimask_output,
         )
+
         masks = self.postprocess_masks(
             low_res_masks,
             input_size=CT_input.shape[-2:],
         )
+        # masks = self.mask_decoder()
         outputs.append(masks)
         outputs.append(image_embeddings_CT)
         outputs.append(image_embeddings_MRI)

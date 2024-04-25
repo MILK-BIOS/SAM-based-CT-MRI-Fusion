@@ -10,3 +10,4 @@ from .mask_decoder import MaskDecoder, SiameseMaskDecoder
 from .prompt_encoder import PromptEncoder
 from .transformer import TwoWayTransformer
 from .class_decoder import ClassDecoder
+from .cnn_decoder import SiameseCnnDecoder

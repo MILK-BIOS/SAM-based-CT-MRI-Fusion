@@ -8,7 +8,7 @@ import torch
 
 from functools import partial
 
-from .modeling import ImageEncoderViT, MaskDecoder, PromptEncoder, Sam, TwoWayTransformer, SiameseSam, ClassDecoder, SiameseMaskDecoder
+from .modeling import ImageEncoderViT, SiameseImageEncoder, MaskDecoder, PromptEncoder, Sam, TwoWayTransformer, SiameseSam, ClassDecoder, SiameseMaskDecoder, SiameseCnnDecoder
 
 
 def build_siamese_sam(num_classes=3, checkpoint=None):
@@ -16,7 +16,7 @@ def build_siamese_sam(num_classes=3, checkpoint=None):
         encoder_embed_dim=768,
         encoder_depth=12,
         encoder_num_heads=12,
-        encoder_global_attn_indexes=[2, 5, 8, 11],
+        encoder_global_attn_indexes=[7, 15, 23, 31],
         num_classes=num_classes,
         checkpoint=checkpoint,
     )
@@ -106,8 +106,8 @@ def _build_sam(
             iou_head_depth=3,
             iou_head_hidden_dim=256,
         ),
-        pixel_mean=[123.675, 116.28, 103.53],
-        pixel_std=[58.395, 57.12, 57.375],
+        pixel_mean=[86.8627, 86.9905, 86.8013],
+        pixel_std=[134.3921, 134.5122, 134.3419],
     )
     sam.eval()
     if checkpoint is not None:
@@ -127,7 +127,8 @@ def _build_siamese_sam(encoder_embed_dim,
     vit_patch_size = 16
     image_embedding_size = image_size // vit_patch_size
     sam = SiameseSam(
-        image_encoder=ImageEncoderViT(
+        image_encoder=SiameseImageEncoder(
+            in_chans=3,
             depth=encoder_depth,
             embed_dim=encoder_embed_dim,
             img_size=image_size,
@@ -139,7 +140,7 @@ def _build_siamese_sam(encoder_embed_dim,
             use_rel_pos=True,
             global_attn_indexes=encoder_global_attn_indexes,
             window_size=14,
-            out_chans=prompt_embed_dim,
+            out_chans=128,
         ),
         prompt_encoder=PromptEncoder(
             embed_dim=prompt_embed_dim,
@@ -148,7 +149,7 @@ def _build_siamese_sam(encoder_embed_dim,
             mask_in_chans=16,
         ),
         mask_decoder=SiameseMaskDecoder(
-            num_multimask_outputs=3,
+            num_multimask_outputs=1,
             transformer=TwoWayTransformer(
                 depth=2,
                 embedding_dim=prompt_embed_dim,
@@ -159,9 +160,9 @@ def _build_siamese_sam(encoder_embed_dim,
             iou_head_depth=3,
             iou_head_hidden_dim=256,
         ),
-        class_decoder=ClassDecoder(prompt_embed_dim*vit_patch_size*vit_patch_size, num_classes),
-        pixel_mean=[123.675, 116.28, 103.53],
-        pixel_std=[58.395, 57.12, 57.375],
+        class_decoder=ClassDecoder(prompt_embed_dim*vit_patch_size*vit_patch_size//2, num_classes),
+        pixel_mean=[86.8627, 86.9905, 86.8013],
+        pixel_std=[134.3921, 134.5122, 134.3419],
     )
     sam.eval()
     if checkpoint is not None:
@@ -171,6 +172,5 @@ def _build_siamese_sam(encoder_embed_dim,
             for k, v in state_dict.items():
                 new_k = k.replace('module.', '') if 'module' in k else k
                 new_state_dict[new_k] = v
-
         sam.load_state_dict(new_state_dict)
     return sam

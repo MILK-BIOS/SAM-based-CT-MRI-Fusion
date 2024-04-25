@@ -2,7 +2,7 @@ import torch
 from tqdm import tqdm
 from segment_anything.build_sam import build_siamese_sam
 from segment_anything.dataloader import MedicalDataset
-from segment_anything.utils import ContrasiveStructureLoss
+from segment_anything.utils import ContrasiveStructureLoss, LaplacianPyramid
 
 
 if __name__ == '__main__':
@@ -14,11 +14,20 @@ if __name__ == '__main__':
     print('-'*15,'Loading Data','-'*15)
     medical_dataset = MedicalDataset(root='dataset', mod1='CT', mod2='MR-T2')
     num_classes = medical_dataset.num_classes
+    mean, std, total_samples = medical_dataset.mean_std()
+    print('Mean: ', mean)
+    print('Std: ', std)
+    print('Total Samples: ', total_samples)
     data_loader = torch.utils.data.DataLoader(medical_dataset, batch_size=batch_size, shuffle=True)
     print('Finished!')
     print('-'*15,'Init Model','-'*15)
-    SiameseSAM = build_siamese_sam(num_classes=num_classes, checkpoint='model/SiameseSAM_epoch11.pth').to(device)
-    SiameseSAM = torch.nn.DataParallel(SiameseSAM, [0,1,2,3])
+    SiameseSAM = build_siamese_sam(num_classes=num_classes, checkpoint=None).to(device)
+    laplacian_pyramid = LaplacianPyramid(level=4)
+    # SiameseSAM = torch.nn.DataParallel(SiameseSAM, [0,1,2,3])
+
+    # for name, param in SiameseSAM.named_parameters():
+    #     if name in 'mask_decoder':
+    #         param.requires_grad = False
 
     criterion = ContrasiveStructureLoss(device=device)
     optimizer = torch.optim.Adam(SiameseSAM.parameters(), lr=lr)
@@ -31,6 +40,7 @@ if __name__ == '__main__':
     for epoch in range(epochs):
         mean_loss = 0
         for inputs, labels in tqdm(data_loader):
+            laplacian = [laplacian_pyramid.build_laplacian_pyramid(inputs[0]), [laplacian_pyramid.build_laplacian_pyramid(inputs[1])]
             inputs, labels = [x.to(device) for x in inputs], [y.to(device) for y in labels]
             optimizer.zero_grad()
             outputs = SiameseSAM(inputs)
