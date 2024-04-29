@@ -188,6 +188,7 @@ class SiameseSam(nn.Module):
         self.prompt_encoder = prompt_encoder
         self.mask_decoder = mask_decoder
         self.class_decoder = class_decoder
+        self.feat_cat = nn.Conv2d(2, 1, 1)
         self.register_buffer("pixel_mean", torch.Tensor(pixel_mean).view(-1, 1, 1), False)
         self.register_buffer("pixel_std", torch.Tensor(pixel_std).view(-1, 1, 1), False)
 
@@ -207,12 +208,13 @@ class SiameseSam(nn.Module):
         image_embeddings_CT = self.image_encoder(input_images_CT)
         input_images_MRI = torch.stack([self.preprocess(x) for x in MRI_input], dim=0)
         image_embeddings_MRI = self.image_encoder(input_images_MRI)
-
         outputs = []
         CT_label = self.class_decoder(image_embeddings_CT)
         MRI_label = self.class_decoder(image_embeddings_MRI)
         outputs.append(CT_label)
         outputs.append(MRI_label)
+        outputs.append(image_embeddings_CT)
+        outputs.append(image_embeddings_MRI)
         sparse_embeddings, dense_embeddings = self.prompt_encoder(
             points=points,
             boxes=boxes,
@@ -226,21 +228,24 @@ class SiameseSam(nn.Module):
             dense_prompt_embeddings=dense_embeddings,
             multimask_output=multimask_output,
         )
-
+        image_embeddings_CT = image_embeddings_CT.view(8, 128, 256)
+        image_embeddings_MRI = image_embeddings_MRI.view(8, 128, 256)
+        merged_feat = torch.cat([image_embeddings_CT, image_embeddings_MRI], dim=1)
         masks = self.postprocess_masks(
             low_res_masks,
             input_size=CT_input.shape[-2:],
         )
+        merged_feat = torch.stack([merged_feat, masks.squeeze(1)], dim=1)
+        masks = self.feat_cat(merged_feat)
+        
         # masks = self.mask_decoder()
         outputs.append(masks)
-        outputs.append(image_embeddings_CT)
-        outputs.append(image_embeddings_MRI)
-
         return outputs
 
     def preprocess(self, x: torch.Tensor) -> torch.Tensor:
         """Normalize pixel values and pad to a square input."""
         # Normalize colors
+        assert x.shape[0] == len(self.pixel_mean), f'Expected mean and std length of {x.shape[0]}, but got invalid mean and std length of {len(self.pixel_mean)}'
         x = (x - self.pixel_mean) / self.pixel_std
 
         # Pad

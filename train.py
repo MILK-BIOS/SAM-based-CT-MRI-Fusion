@@ -6,8 +6,8 @@ from segment_anything.utils import ContrasiveStructureLoss, LaplacianPyramid
 
 
 if __name__ == '__main__':
-    epochs = 100
-    batch_size = 32
+    epochs = 400
+    batch_size = 8
     lr = 1e-3
     device = "cuda"
 
@@ -18,11 +18,11 @@ if __name__ == '__main__':
     print('Mean: ', mean)
     print('Std: ', std)
     print('Total Samples: ', total_samples)
-    data_loader = torch.utils.data.DataLoader(medical_dataset, batch_size=batch_size, shuffle=True)
+    data_loader = torch.utils.data.DataLoader(medical_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     print('Finished!')
     print('-'*15,'Init Model','-'*15)
     SiameseSAM = build_siamese_sam(num_classes=num_classes, checkpoint=None).to(device)
-    laplacian_pyramid = LaplacianPyramid(level=4)
+    laplacian_pyramid = LaplacianPyramid(levels=4, device=device)
     # SiameseSAM = torch.nn.DataParallel(SiameseSAM, [0,1,2,3])
 
     # for name, param in SiameseSAM.named_parameters():
@@ -40,18 +40,19 @@ if __name__ == '__main__':
     for epoch in range(epochs):
         mean_loss = 0
         for inputs, labels in tqdm(data_loader):
-            laplacian = [laplacian_pyramid.build_laplacian_pyramid(inputs[0]), [laplacian_pyramid.build_laplacian_pyramid(inputs[1])]
+            laplacian_CT, laplacian_MRI = laplacian_pyramid.build_laplacian_pyramid_CT(inputs[0]), laplacian_pyramid.build_laplacian_pyramid_MRI(inputs[1])
+            inputs = [laplacian_CT[0], laplacian_MRI[0]]
+ 
             inputs, labels = [x.to(device) for x in inputs], [y.to(device) for y in labels]
             optimizer.zero_grad()
             outputs = SiameseSAM(inputs)
             outputs = [i.to(device) for i in outputs]
-            # outputs[0] = outputs[0].argmax(dim=-1).float()
-            # outputs[1] = outputs[1].argmax(dim=-1).float()
+            outputs[4] = laplacian_pyramid(outputs[4])
             loss = criterion(CT_pred=outputs[0],
                              MRI_pred=outputs[1],
-                             merged=outputs[2],
-                             encoded_CT=outputs[3],
-                             encoded_MRI=outputs[4],
+                             merged=outputs[4],
+                             encoded_CT=outputs[2],
+                             encoded_MRI=outputs[3],
                              CT_target=labels[0],
                              MRI_target=labels[1],
                              origin_CT=inputs[0],

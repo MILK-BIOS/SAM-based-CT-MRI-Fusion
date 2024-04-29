@@ -13,9 +13,9 @@ from .modeling import ImageEncoderViT, SiameseImageEncoder, MaskDecoder, PromptE
 
 def build_siamese_sam(num_classes=3, checkpoint=None):
     return _build_siamese_sam(
-        encoder_embed_dim=768,
-        encoder_depth=12,
-        encoder_num_heads=12,
+        encoder_embed_dim=1280,
+        encoder_depth=32,
+        encoder_num_heads=16,
         encoder_global_attn_indexes=[7, 15, 23, 31],
         num_classes=num_classes,
         checkpoint=checkpoint,
@@ -128,7 +128,7 @@ def _build_siamese_sam(encoder_embed_dim,
     image_embedding_size = image_size // vit_patch_size
     sam = SiameseSam(
         image_encoder=SiameseImageEncoder(
-            in_chans=3,
+            in_chans=1,
             depth=encoder_depth,
             embed_dim=encoder_embed_dim,
             img_size=image_size,
@@ -140,7 +140,7 @@ def _build_siamese_sam(encoder_embed_dim,
             use_rel_pos=True,
             global_attn_indexes=encoder_global_attn_indexes,
             window_size=14,
-            out_chans=128,
+            out_chans=prompt_embed_dim // 2,
         ),
         prompt_encoder=PromptEncoder(
             embed_dim=prompt_embed_dim,
@@ -161,8 +161,8 @@ def _build_siamese_sam(encoder_embed_dim,
             iou_head_hidden_dim=256,
         ),
         class_decoder=ClassDecoder(prompt_embed_dim*vit_patch_size*vit_patch_size//2, num_classes),
-        pixel_mean=[86.8627, 86.9905, 86.8013],
-        pixel_std=[134.3921, 134.5122, 134.3419],
+        pixel_mean=[86.8950],
+        pixel_std=[134.4275],
     )
     sam.eval()
     if checkpoint is not None:
