@@ -12,7 +12,7 @@ class MedicalDataset(Dataset):
                  root: str = 'dataset', 
                  mod1: str = 'CT', 
                  mod2: str = 'MR-T2',
-                 use_diff_pair: bool = False):
+                 use_diff_pair: bool = True):
         super().__init__()
         self.root = root
         self.classes = os.listdir(root)

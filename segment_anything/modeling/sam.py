@@ -228,8 +228,8 @@ class SiameseSam(nn.Module):
             dense_prompt_embeddings=dense_embeddings,
             multimask_output=multimask_output,
         )
-        image_embeddings_CT = image_embeddings_CT.view(8, 128, 256)
-        image_embeddings_MRI = image_embeddings_MRI.view(8, 128, 256)
+        image_embeddings_CT = image_embeddings_CT.view(-1, 128, 256)
+        image_embeddings_MRI = image_embeddings_MRI.view(-1, 128, 256)
         merged_feat = torch.cat([image_embeddings_CT, image_embeddings_MRI], dim=1)
         masks = self.postprocess_masks(
             low_res_masks,

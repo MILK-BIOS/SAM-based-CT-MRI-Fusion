@@ -6,10 +6,16 @@ import torch
 
 
 class LaplacianPyramid(nn.Module):
-    def __init__(self, levels: int = 4, device: str='cuda'):
+    def __init__(self, levels: int = 4, 
+                 device: str='cuda', 
+                 in_chans: int = 1, 
+                 embed_dim: int = 768,
+                 patch_size: int = 16,
+                ):
         super().__init__()
         self.levels = levels
         self.device = device
+        self.patch_embedding = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, padding=0)
 
     def build_laplacian_pyramid_CT(self, image: torch.Tensor, for_train: bool = True):
         self.gaussian_pyramid_CT = [image]

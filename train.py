@@ -1,4 +1,5 @@
 import torch
+import os
 from tqdm import tqdm
 from segment_anything.build_sam import build_siamese_sam
 from segment_anything.dataloader import MedicalDataset
@@ -10,6 +11,7 @@ if __name__ == '__main__':
     batch_size = 8
     lr = 1e-3
     device = "cuda"
+    checkpoint = 'model/SiameseSAM_epoch25.pth'
 
     print('-'*15,'Loading Data','-'*15)
     medical_dataset = MedicalDataset(root='dataset', mod1='CT', mod2='MR-T2')
@@ -21,7 +23,9 @@ if __name__ == '__main__':
     data_loader = torch.utils.data.DataLoader(medical_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
     print('Finished!')
     print('-'*15,'Init Model','-'*15)
-    SiameseSAM = build_siamese_sam(num_classes=num_classes, checkpoint=None).to(device)
+    SiameseSAM = build_siamese_sam(num_classes=num_classes, checkpoint=checkpoint).to(device)
+    print('Load model from', checkpoint)
+
     laplacian_pyramid = LaplacianPyramid(levels=4, device=device)
     # SiameseSAM = torch.nn.DataParallel(SiameseSAM, [0,1,2,3])
 

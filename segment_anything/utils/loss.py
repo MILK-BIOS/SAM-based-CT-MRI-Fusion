@@ -3,11 +3,12 @@ from torch import Tensor
 import torch.nn as nn
 import torchvision.transforms.functional as F
 from torchmetrics.image.ssim import StructuralSimilarityIndexMeasure as SSIM
+from pytorch_msssim import ms_ssim, MS_SSIM
 
 
 class ContrasiveStructureLoss(nn.Module):
     def __init__(self, 
-                 data_range=1.0, 
+                 data_range=255, 
                  win_size=11, 
                  win_sigma=1.5, 
                  k1=0.01, 
@@ -17,9 +18,7 @@ class ContrasiveStructureLoss(nn.Module):
                  device='cuda'):
         super().__init__()
         self.device = device
-        self.ssim_loss = SSIM(data_range=data_range, 
-                             k1=k1, 
-                             k2=k2).to(device)
+        self.ssim_loss = MS_SSIM(data_range=255, size_average=True, channel=3)
         self.classification_loss = nn.CrossEntropyLoss()
         self.contrasive_loss = ContrasiveLoss()
         self.illumination_loss = IlluminationLoss()
@@ -36,8 +35,8 @@ class ContrasiveStructureLoss(nn.Module):
                 origin_CT: Tensor, 
                 origin_MRI: Tensor):
         # SSIM
-        ssim_loss_CT = 1 - self.ssim_loss(target=origin_CT, preds=merged) + 0.02 * max(50 - self.psnr_loss(origin_CT, merged), 0)
-        ssim_loss_MRI = 1 - self.ssim_loss(target=origin_MRI, preds=merged) + 0.02 * max(50 - self.psnr_loss(origin_MRI, merged), 0)
+        ssim_loss_CT = 1 - ms_ssim(origin_CT, merged, data_range=255, size_average=True)# + 0.02 * max(50 - self.psnr_loss(origin_CT, merged), 0)
+        ssim_loss_MRI = 1 - ms_ssim(origin_MRI, merged, data_range=255, size_average=True)# + 0.02 * max(50 - self.psnr_loss(origin_MRI, merged), 0)
 
         # Cross Entropy Loss
         classification_loss = self.classification_loss(CT_pred, CT_target) + self.classification_loss(MRI_pred, MRI_target)
@@ -87,7 +86,7 @@ class ContrasiveLoss(nn.Module):
         dis_MRI = torch.norm(encoded_MRI, dim=1, p=2) ** 2
         dis = torch.norm(encoded_CT-encoded_MRI, dim=1, p=2) ** 2
         # Adjust contrastive loss according to the ratio of positive to negetive
-        loss = is_same_class * dis +  2 * (1 - is_same_class) * torch.max(self.threshold - dis, torch.zeros(len(dis)).to(device))# + torch.max(25-dis_CT, torch.zeros(len(dis)).to(device)) + torch.max(25-dis_MRI, torch.zeros(len(dis)).to(device))
+        loss = is_same_class * dis +  2 * (1 - is_same_class) * torch.max(self.threshold - dis, torch.zeros(len(dis)).to(device)) + torch.max(25-dis_CT, torch.zeros(len(dis)).to(device)) + torch.max(25-dis_MRI, torch.zeros(len(dis)).to(device))
         loss = torch.mean(loss)
         return loss
     
