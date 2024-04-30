@@ -81,10 +81,12 @@ class LaplacianPyramid(nn.Module):
         embedded_MRI = embedded_MRI.permute(0,2,3,1).reshape(-1, H//self.patch_size * W//self.patch_size, self.embed_dim)
 
         fusion_pyramid = self.attention_mode(q=embedded_MRI, k=embedded_CT, v=embedded_MRI).view(-1, H//self.patch_size, W//self.patch_size, self.embed_dim).permute(0, 3, 1, 2)
-        upscaled = self.output_upscaling(fusion_pyramid).reshape(L, B, H, W, -1)
-        max_values = torch.sum(upscaled, dim=0).permute(0, 3, 1, 2)
-        assert max_values.shape == img.shape, f"Max value has a shape of {max_values.shape}, but got img shape of {img.shape}"
-        blended_image = torch.div((max_values + img), L+1)
+        upscaled = self.output_upscaling(fusion_pyramid).reshape(L, B, H, W, -1).permute(0, 1, 4, 2, 3)
+        max_values, max_indices = torch.max(torch.stack([self.laplacian_pyramid_CT, self.laplacian_pyramid_MRI]), dim=0)
+        upscaled = upscaled + max_values
+        fusion_img = torch.sum(upscaled, dim=0)
+        assert fusion_img.shape == img.shape, f"Max value has a shape of {fusion_img.shape}, but got img shape of {img.shape}"
+        blended_image = torch.div((fusion_img + img), L+1)
         return blended_image
     
 
