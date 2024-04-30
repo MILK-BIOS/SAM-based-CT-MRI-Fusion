@@ -3,6 +3,8 @@ import numpy as np
 import torch.nn.functional as F
 import torch.nn as nn
 import torch
+from ..modeling.transformer import Attention
+from ..modeling.common import LayerNorm2d
 
 
 class LaplacianPyramid(nn.Module):
@@ -15,7 +17,18 @@ class LaplacianPyramid(nn.Module):
         super().__init__()
         self.levels = levels
         self.device = device
-        self.patch_embedding = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, padding=0)
+        self.embed_dim = embed_dim
+        self.patch_size = patch_size
+        self.patch_embedding = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size, padding=0).to(device)
+        self.attention_mode = Attention(embed_dim, 16).to(device)
+        self.attention_fusion = Attention(embed_dim, 16).to(device)
+        self.output_upscaling = nn.Sequential(
+            nn.ConvTranspose2d(embed_dim, embed_dim // 8, kernel_size=4, stride=4),
+            LayerNorm2d(embed_dim // 8),
+            nn.GELU(),
+            nn.ConvTranspose2d(embed_dim // 8, 1, kernel_size=4, stride=4),
+            nn.GELU(),
+        ).to(device)
 
     def build_laplacian_pyramid_CT(self, image: torch.Tensor, for_train: bool = True):
         self.gaussian_pyramid_CT = [image]
@@ -57,25 +70,32 @@ class LaplacianPyramid(nn.Module):
 
         return self.laplacian_pyramid_MRI
     
-    def blend_images(self, image1, image2):
-        laplacian_pyramid1 = self.laplacian_pyramid_CT
-        laplacian_pyramid2 = self.laplacian_pyramid_MRI
-        
-        blended_pyramid = []
-        for lap1, lap2 in zip(laplacian_pyramid1, laplacian_pyramid2):
-            blended = np.where(np.abs(lap1) > np.abs(lap2), lap1, lap2)
-            blended_pyramid.append(blended)
-        
-        blended_image = blended_pyramid[0]
-        for i in range(1, self.levels - 1):
-            blended_image = cv2.pyrUp(blended_image)
-            blended_image = cv2.add(blended_pyramid[i], blended_image) // 2
-
-        return blended_image
+    def blend_images(self, img, pyr_list):
+        return 
     
     def forward(self, img):
-        max_values, max_indices = torch.max(torch.stack([self.laplacian_pyramid_CT, self.laplacian_pyramid_MRI]), dim=0)
-        max_values = torch.sum(max_values, dim=0)
+        L, B, C, H, W = self.laplacian_pyramid_CT.shape
+        embedded_CT = self.patch_embedding(self.laplacian_pyramid_CT.view(-1, C, H, W))
+        embedded_MRI = self.patch_embedding(self.laplacian_pyramid_MRI.view(-1, C, H, W))
+        embedded_CT = embedded_CT.permute(0,2,3,1).reshape(-1, H//self.patch_size * W//self.patch_size, self.embed_dim)
+        embedded_MRI = embedded_MRI.permute(0,2,3,1).reshape(-1, H//self.patch_size * W//self.patch_size, self.embed_dim)
+
+        fusion_pyramid = self.attention_mode(q=embedded_MRI, k=embedded_CT, v=embedded_MRI).view(-1, H//self.patch_size, W//self.patch_size, self.embed_dim).permute(0, 3, 1, 2)
+        upscaled = self.output_upscaling(fusion_pyramid).reshape(L, B, H, W, -1)
+        max_values = torch.sum(upscaled, dim=0).permute(0, 3, 1, 2)
         assert max_values.shape == img.shape, f"Max value has a shape of {max_values.shape}, but got img shape of {img.shape}"
-        blended_image = torch.div((max_values + img), 5)
+        blended_image = torch.div((max_values + img), L+1)
         return blended_image
+    
+
+class CrossAttention(nn.Module):
+    def __init__(self, embed_dim: int =768):
+        super().__init__()
+        self.Wq = nn.Linear(embed_dim, embed_dim)
+        self.Wk = nn.Linear(embed_dim, embed_dim)
+        self.Wv = nn.Linear(embed_dim, embed_dim)
+
+    def forward(self, CT, MRI):
+        k = self.Wk(MRI)
+        v = self.Wv(MRI)
+        q = self.Wq(CT)

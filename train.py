@@ -20,13 +20,13 @@ if __name__ == '__main__':
     print('Mean: ', mean)
     print('Std: ', std)
     print('Total Samples: ', total_samples)
-    data_loader = torch.utils.data.DataLoader(medical_dataset, batch_size=batch_size, shuffle=True, drop_last=True)
+    data_loader = torch.utils.data.DataLoader(medical_dataset, batch_size=batch_size, shuffle=False, drop_last=True)
     print('Finished!')
     print('-'*15,'Init Model','-'*15)
     SiameseSAM = build_siamese_sam(num_classes=num_classes, checkpoint=checkpoint).to(device)
     print('Load model from', checkpoint)
 
-    laplacian_pyramid = LaplacianPyramid(levels=4, device=device)
+    laplacian_pyramid = LaplacianPyramid(levels=4, device=device).to(device)
     # SiameseSAM = torch.nn.DataParallel(SiameseSAM, [0,1,2,3])
 
     # for name, param in SiameseSAM.named_parameters():

@@ -161,8 +161,8 @@ def _build_siamese_sam(encoder_embed_dim,
             iou_head_hidden_dim=256,
         ),
         class_decoder=ClassDecoder(prompt_embed_dim*vit_patch_size*vit_patch_size//2, num_classes),
-        pixel_mean=[78.5689],
-        pixel_std=[126.6962],
+        pixel_mean=[86.8950],
+        pixel_std=[134.4275],
     )
     sam.eval()
     if checkpoint is not None:
