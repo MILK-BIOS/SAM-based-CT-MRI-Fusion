@@ -11,7 +11,7 @@ if __name__ == '__main__':
     batch_size = 8
     lr = 1e-3
     device = "cuda"
-    checkpoint = 'model/SiameseSAM_epoch25.pth'
+    checkpoint = 'model/best/SiameseSAM_epoch10.pth'
 
     print('-'*15,'Loading Data','-'*15)
     medical_dataset = MedicalDataset(root='dataset', mod1='CT', mod2='MR-T2')
@@ -46,7 +46,7 @@ if __name__ == '__main__':
         for inputs, labels in tqdm(data_loader):
             laplacian_CT, laplacian_MRI = laplacian_pyramid.build_laplacian_pyramid_CT(inputs[0]), laplacian_pyramid.build_laplacian_pyramid_MRI(inputs[1])
             inputs = [laplacian_CT[0], laplacian_MRI[0]]
- 
+
             inputs, labels = [x.to(device) for x in inputs], [y.to(device) for y in labels]
             optimizer.zero_grad()
             outputs = SiameseSAM(inputs)

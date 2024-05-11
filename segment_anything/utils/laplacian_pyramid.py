@@ -23,11 +23,11 @@ class LaplacianPyramid(nn.Module):
         self.attention_mode = Attention(embed_dim, 16).to(device)
         self.attention_fusion = Attention(embed_dim, 16).to(device)
         self.output_upscaling = nn.Sequential(
-            nn.ConvTranspose2d(embed_dim, embed_dim // 8, kernel_size=4, stride=4),
-            LayerNorm2d(embed_dim // 8),
+            nn.ConvTranspose2d(embed_dim, embed_dim // 4, kernel_size=4, stride=4),
             nn.GELU(),
-            nn.ConvTranspose2d(embed_dim // 8, 1, kernel_size=4, stride=4),
+            nn.ConvTranspose2d(embed_dim // 4, embed_dim // 8, kernel_size=4, stride=4),
             nn.GELU(),
+            nn.Conv2d(embed_dim // 8, in_chans, 1)
         ).to(device)
 
     def build_laplacian_pyramid_CT(self, image: torch.Tensor, for_train: bool = True):

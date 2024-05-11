@@ -39,7 +39,7 @@ class MedicalDataset(Dataset):
                             ret, frame = cap.read()
                             if not ret:
                                 break
-                            frame_list.append(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY))  # 
+                            frame_list.append(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)) 
 
                         # 关闭视频文件
                         cap.release()
