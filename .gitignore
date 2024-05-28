@@ -46,3 +46,8 @@ dataset/
 model/
 notebooks/sam_vit_h_4b8939.pth
 night-1927265_640.jpg
+SDNet/
+TarDAL/
+DecompositionForFusion/
+CDDFuse/
+MetaFusion/

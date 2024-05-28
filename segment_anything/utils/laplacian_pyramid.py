@@ -75,6 +75,7 @@ class LaplacianPyramid(nn.Module):
     
     def forward(self, img):
         L, B, C, H, W = self.laplacian_pyramid_CT.shape
+        img = torch.div(img, 5)
         embedded_CT = self.patch_embedding(self.laplacian_pyramid_CT.view(-1, C, H, W))
         embedded_MRI = self.patch_embedding(self.laplacian_pyramid_MRI.view(-1, C, H, W))
         embedded_CT = embedded_CT.permute(0,2,3,1).reshape(-1, H//self.patch_size * W//self.patch_size, self.embed_dim)
@@ -86,7 +87,7 @@ class LaplacianPyramid(nn.Module):
         upscaled = upscaled + max_values
         fusion_img = torch.sum(upscaled, dim=0)
         assert fusion_img.shape == img.shape, f"Max value has a shape of {fusion_img.shape}, but got img shape of {img.shape}"
-        blended_image = torch.div((fusion_img + img), L+1)
+        blended_image = torch.div((fusion_img + img), 1)
         return blended_image
     
 

@@ -9,9 +9,9 @@ from segment_anything.utils import ContrasiveStructureLoss, LaplacianPyramid
 if __name__ == '__main__':
     epochs = 400
     batch_size = 8
-    lr = 1e-3
+    lr = 1e-1
     device = "cuda"
-    checkpoint = 'model/best/SiameseSAM_epoch10.pth'
+    checkpoint = None
 
     print('-'*15,'Loading Data','-'*15)
     medical_dataset = MedicalDataset(root='dataset', mod1='CT', mod2='MR-T2')
@@ -33,10 +33,14 @@ if __name__ == '__main__':
     #     if name in 'mask_decoder':
     #         param.requires_grad = False
 
+    pretrained_dict = torch.load('sam_vit_b_01ec64.pth')
+
+    # 加载权重时使用 strict=False 参数
+    # SiameseSAM.load_state_dict(pretrained_dict, strict=False)
     criterion = ContrasiveStructureLoss(device=device)
     optimizer = torch.optim.Adam(SiameseSAM.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(SiameseSAM.parameters(), lr=lr, momentum=0.9)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[20,30,80], gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 15, 20, 30, 80], gamma=0.1)
 
     print('Finished!')
     print('-'*15,'Training','-'*15)
@@ -44,14 +48,14 @@ if __name__ == '__main__':
     for epoch in range(epochs):
         mean_loss = 0
         for inputs, labels in tqdm(data_loader):
-            laplacian_CT, laplacian_MRI = laplacian_pyramid.build_laplacian_pyramid_CT(inputs[0]), laplacian_pyramid.build_laplacian_pyramid_MRI(inputs[1])
-            inputs = [laplacian_CT[0], laplacian_MRI[0]]
+            # laplacian_CT, laplacian_MRI = laplacian_pyramid.build_laplacian_pyramid_CT(inputs[0]), laplacian_pyramid.build_laplacian_pyramid_MRI(inputs[1])
+            # inputs = [laplacian_CT[0], laplacian_MRI[0]]
 
             inputs, labels = [x.to(device) for x in inputs], [y.to(device) for y in labels]
             optimizer.zero_grad()
             outputs = SiameseSAM(inputs)
             outputs = [i.to(device) for i in outputs]
-            outputs[4] = laplacian_pyramid(outputs[4])
+            # outputs[4] = laplacian_pyramid(outputs[4])
             loss = criterion(CT_pred=outputs[0],
                              MRI_pred=outputs[1],
                              merged=outputs[4],

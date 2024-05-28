@@ -93,7 +93,7 @@ class MedicalDataset(Dataset):
         labels = self.label[index]
         transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Resize((256, 256))
+            transforms.Resize((1024, 1024))
         ])
         modal_images = [transform(img) for img in modal_images]
         return modal_images, labels

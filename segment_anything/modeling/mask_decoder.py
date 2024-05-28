@@ -211,6 +211,7 @@ class SiameseMaskDecoder(nn.Module):
         self.iou_token = nn.Embedding(1, transformer_dim)
         self.num_mask_tokens = num_multimask_outputs + 1
         self.mask_tokens = nn.Embedding(self.num_mask_tokens, transformer_dim)
+        self.conv = nn.Conv2d(2 * transformer_dim, transformer_dim, kernel_size=1)
 
         self.output_upscaling = nn.Sequential(
             nn.ConvTranspose2d(transformer_dim, transformer_dim // 4, kernel_size=2, stride=2),
@@ -250,7 +251,8 @@ class SiameseMaskDecoder(nn.Module):
           torch.Tensor: batched predicted masks
           torch.Tensor: batched predictions of mask quality
         """
-        image_embeddings = torch.cat([CT_image_embeddings, MRI_image_embeddings], dim=2)
+        image_embeddings = torch.cat([CT_image_embeddings, MRI_image_embeddings], dim=1)
+        image_embeddings = self.conv(image_embeddings)
         masks = self.predict_masks(
             image_embeddings=image_embeddings,
             image_pe=image_pe,
@@ -282,10 +284,9 @@ class SiameseMaskDecoder(nn.Module):
         tokens = torch.cat((output_tokens, sparse_prompt_embeddings), dim=1)
 
         # Expand per-image data in batch direction to be per-mask
-        src = torch.repeat_interleave(image_embeddings, tokens.shape[0], dim=0)
+        src = image_embeddings
         src = src + dense_prompt_embeddings
         pos_src = torch.repeat_interleave(image_pe, tokens.shape[0], dim=0)
-        src = src.squeeze(0)
         b, c, h, w = src.shape
 
         # Run the transformer

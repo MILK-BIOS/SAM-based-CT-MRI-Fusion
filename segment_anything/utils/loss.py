@@ -15,14 +15,15 @@ class ContrasiveStructureLoss(nn.Module):
                  k2=0.03, 
                  eps=1e-8, 
                  reduction='mean',
+                 use_contrasive = False,
                  device='cuda'):
         super().__init__()
         self.device = device
         self.ssim_loss = MS_SSIM(data_range=1, size_average=True, channel=3)
         self.classification_loss = nn.CrossEntropyLoss()
-        self.contrasive_loss = ContrasiveLoss()
         self.illumination_loss = IlluminationLoss()
         self.psnr_loss = PSNRLoss()
+        self.use_contrasive = use_contrasive
 
     def forward(self, 
                 CT_pred: Tensor, 
@@ -33,7 +34,7 @@ class ContrasiveStructureLoss(nn.Module):
                 CT_target: Tensor,
                 MRI_target: Tensor,
                 origin_CT: Tensor, 
-                origin_MRI: Tensor):
+                origin_MRI: Tensor,):
         # SSIM
         ssim_loss_CT = 1 - ms_ssim(origin_CT, merged, data_range=1, size_average=True) + 0.01 * max(50 - self.psnr_loss(origin_CT, merged), 0)
         ssim_loss_MRI = 1 - ms_ssim(origin_MRI, merged, data_range=1, size_average=True) + 0.01 * max(50 - self.psnr_loss(origin_MRI, merged), 0)
@@ -41,14 +42,14 @@ class ContrasiveStructureLoss(nn.Module):
         # Cross Entropy Loss
         classification_loss = self.classification_loss(CT_pred, CT_target) + self.classification_loss(MRI_pred, MRI_target)
 
-        # Contrasive Loss
-        is_same_class = (CT_target == MRI_target).float()
-        contrasive_loss = self.contrasive_loss(encoded_CT, encoded_MRI, is_same_class, self.device)
-
         # Illumination Loss
         illuminationLoss = self.illumination_loss(merged)
-        
-        loss = ssim_loss_CT + 5 * ssim_loss_MRI + classification_loss + 0.1 * contrasive_loss + 0.1 * illuminationLoss + 2 * max(0.5 - torch.mean(merged), 0)
+        # print(ssim_loss_CT)
+        # print(ssim_loss_MRI)
+        # print(classification_loss)
+        # print(0.1 * max(8 - illuminationLoss, 0))
+        # print(2 * max(0.5 - torch.mean(merged), 0))
+        loss = ssim_loss_CT + 5 * ssim_loss_MRI + classification_loss + 0.1 * max(8 - illuminationLoss, 0)
         return loss
     
 class SSIMLoss(nn.Module):
@@ -103,4 +104,4 @@ class IlluminationLoss(nn.Module):
         h_tv = torch.pow((x[:,:,1:,:]-x[:,:,:H-1,:]),2).sum()
         w_tv = torch.pow((x[:,:,:,1:]-x[:,:,:,:W-1]),2).sum()
         loss = (h_tv/count_h + w_tv/count_w) / B
-        return loss*255
+        return loss

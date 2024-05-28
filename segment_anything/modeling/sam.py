@@ -209,35 +209,35 @@ class SiameseSam(nn.Module):
         input_images_MRI = torch.stack([self.preprocess(x) for x in MRI_input], dim=0)
         image_embeddings_MRI = self.image_encoder(input_images_MRI)
         outputs = []
-        CT_label = self.class_decoder(image_embeddings_CT)
-        MRI_label = self.class_decoder(image_embeddings_MRI)
-        outputs.append(CT_label)
-        outputs.append(MRI_label)
+        cls_input = torch.cat([image_embeddings_CT, image_embeddings_MRI], dim=1)
+        label, cam = self.class_decoder(image_embeddings_CT)
+        # CT_label, CT_cam = self.class_decoder(image_embeddings_CT)
+        # MRI_label, MRI_cam = self.class_decoder(image_embeddings_MRI)
+        outputs.append(label)
+        outputs.append(label)
         outputs.append(image_embeddings_CT)
         outputs.append(image_embeddings_MRI)
+        # mask_cam = CT_cam + MRI_cam
+        mask_cam = cam
+        # mask_cam = mask_cam.unsqueeze(1).view(-1, 1, 64, 64)
         sparse_embeddings, dense_embeddings = self.prompt_encoder(
             points=points,
             boxes=boxes,
-            masks=mask_inputs
+            masks=mask_cam
         )
         low_res_masks = self.mask_decoder(
-            CT_image_embeddings=image_embeddings_CT.unsqueeze(0),
-            MRI_image_embeddings=image_embeddings_MRI.unsqueeze(0),
+            CT_image_embeddings=image_embeddings_CT,
+            MRI_image_embeddings=image_embeddings_MRI,
             image_pe=self.prompt_encoder.get_dense_pe(),
             sparse_prompt_embeddings=sparse_embeddings,
             dense_prompt_embeddings=dense_embeddings,
             multimask_output=multimask_output,
         )
-        image_embeddings_CT = image_embeddings_CT.view(-1, 128, 256)
-        image_embeddings_MRI = image_embeddings_MRI.view(-1, 128, 256)
-        merged_feat = torch.cat([image_embeddings_CT, image_embeddings_MRI], dim=1)
+
         masks = self.postprocess_masks(
             low_res_masks,
             input_size=CT_input.shape[-2:],
         )
-        merged_feat = torch.stack([merged_feat, masks.squeeze(1)], dim=1)
-        masks = self.feat_cat(merged_feat)
-        
         # masks = self.mask_decoder()
         outputs.append(masks)
         return outputs
@@ -259,7 +259,7 @@ class SiameseSam(nn.Module):
         self,
         masks: torch.Tensor,
         input_size: Tuple[int, ...],
-        original_size: Tuple[int, ...] = (256, 256),
+        original_size: Tuple[int, ...] = (1024, 1024),
     ) -> torch.Tensor:
 
         masks = F.interpolate(
@@ -268,6 +268,5 @@ class SiameseSam(nn.Module):
             mode="bilinear",
             align_corners=False,
         )
-        masks = masks[..., : input_size[0], : input_size[1]]
         masks = F.interpolate(masks, original_size, mode="bilinear", align_corners=False)
         return masks

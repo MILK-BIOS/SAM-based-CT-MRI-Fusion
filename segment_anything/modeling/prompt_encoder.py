@@ -40,7 +40,7 @@ class PromptEncoder(nn.Module):
         self.embed_dim = embed_dim
         self.input_image_size = input_image_size
         self.image_embedding_size = image_embedding_size
-        self.pe_layer = PositionEmbeddingRandom(embed_dim // 2)
+        self.pe_layer = PositionEmbeddingRandom(embed_dim)
 
         self.num_point_embeddings: int = 4  # pos/neg point + 2 box corners
         point_embeddings = [nn.Embedding(1, embed_dim) for i in range(self.num_point_embeddings)]
@@ -49,13 +49,13 @@ class PromptEncoder(nn.Module):
 
         self.mask_input_size = (4 * image_embedding_size[0], 4 * image_embedding_size[1])
         self.mask_downscaling = nn.Sequential(
-            nn.Conv2d(1, mask_in_chans // 4, kernel_size=2, stride=2),
+            nn.Conv2d(3, mask_in_chans // 4, kernel_size=2, stride=2),
             LayerNorm2d(mask_in_chans // 4),
             activation(),
-            nn.Conv2d(mask_in_chans // 4, mask_in_chans, kernel_size=2, stride=2),
+            nn.ConvTranspose2d(mask_in_chans // 4, mask_in_chans, kernel_size=2, stride=2),
             LayerNorm2d(mask_in_chans),
             activation(),
-            nn.Conv2d(mask_in_chans, embed_dim, kernel_size=1),
+            nn.Conv2d(mask_in_chans, embed_dim*2, kernel_size=1),
         )
         self.no_mask_embed = nn.Embedding(1, embed_dim)
 
@@ -149,7 +149,7 @@ class PromptEncoder(nn.Module):
             Bx(embed_dim)x(embed_H)x(embed_W)
         """
         bs = self._get_batch_size(points, boxes, masks)
-        sparse_embeddings = torch.empty((bs, 0, self.embed_dim), device=self._get_device())
+        sparse_embeddings = torch.empty((bs, 0, self.embed_dim*2), device=self._get_device())
         if points is not None:
             coords, labels = points
             point_embeddings = self._embed_points(coords, labels, pad=(boxes is None))
