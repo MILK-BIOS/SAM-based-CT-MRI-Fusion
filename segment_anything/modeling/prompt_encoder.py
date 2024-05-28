@@ -7,7 +7,7 @@
 import numpy as np
 import torch
 from torch import nn
-
+import clip
 from typing import Any, Optional, Tuple, Type
 
 from .common import LayerNorm2d
@@ -21,6 +21,7 @@ class PromptEncoder(nn.Module):
         input_image_size: Tuple[int, int],
         mask_in_chans: int,
         activation: Type[nn.Module] = nn.GELU,
+        device = 'cuda'
     ) -> None:
         """
         Encodes prompts for input to SAM's mask decoder.
@@ -40,13 +41,15 @@ class PromptEncoder(nn.Module):
         self.embed_dim = embed_dim
         self.input_image_size = input_image_size
         self.image_embedding_size = image_embedding_size
-        self.pe_layer = PositionEmbeddingRandom(embed_dim)
+        self.pe_layer = PositionEmbeddingRandom(embed_dim // 2)
 
         self.num_point_embeddings: int = 4  # pos/neg point + 2 box corners
         point_embeddings = [nn.Embedding(1, embed_dim) for i in range(self.num_point_embeddings)]
         self.point_embeddings = nn.ModuleList(point_embeddings)
         self.not_a_point_embed = nn.Embedding(1, embed_dim)
-
+        self.clip, self.preprocess = clip.load("ViT-B/32", device=device)
+        self.text = clip.tokenize(['Image fusion of CT and MRI', 'CT of brain', 'MRI of brain']).to(device)
+        self.text_conv = nn.Conv1d(3, 1, kernel_size=3, padding=1, stride=2)
         self.mask_input_size = (4 * image_embedding_size[0], 4 * image_embedding_size[1])
         self.mask_downscaling = nn.Sequential(
             nn.Conv2d(3, mask_in_chans // 4, kernel_size=2, stride=2),
@@ -55,7 +58,7 @@ class PromptEncoder(nn.Module):
             nn.ConvTranspose2d(mask_in_chans // 4, mask_in_chans, kernel_size=2, stride=2),
             LayerNorm2d(mask_in_chans),
             activation(),
-            nn.Conv2d(mask_in_chans, embed_dim*2, kernel_size=1),
+            nn.Conv2d(mask_in_chans, embed_dim, kernel_size=1),
         )
         self.no_mask_embed = nn.Embedding(1, embed_dim)
 
@@ -99,6 +102,10 @@ class PromptEncoder(nn.Module):
         corner_embedding[:, 1, :] += self.point_embeddings[3].weight
         return corner_embedding
 
+    def _embed_text(self, text: torch.Tensor) -> torch.Tensor:
+        text_embedding = self.clip.encode_text(text)
+        return text_embedding
+
     def _embed_masks(self, masks: torch.Tensor) -> torch.Tensor:
         """Embeds mask inputs."""
         mask_embedding = self.mask_downscaling(masks)
@@ -130,6 +137,7 @@ class PromptEncoder(nn.Module):
         points: Optional[Tuple[torch.Tensor, torch.Tensor]],
         boxes: Optional[torch.Tensor],
         masks: Optional[torch.Tensor],
+        text = 'Image fusion of CT and MRI'
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Embeds different types of prompts, returning both sparse and dense
@@ -149,7 +157,7 @@ class PromptEncoder(nn.Module):
             Bx(embed_dim)x(embed_H)x(embed_W)
         """
         bs = self._get_batch_size(points, boxes, masks)
-        sparse_embeddings = torch.empty((bs, 0, self.embed_dim*2), device=self._get_device())
+        sparse_embeddings = torch.empty((bs, 0, self.embed_dim), device=self._get_device())
         if points is not None:
             coords, labels = points
             point_embeddings = self._embed_points(coords, labels, pad=(boxes is None))
@@ -157,7 +165,11 @@ class PromptEncoder(nn.Module):
         if boxes is not None:
             box_embeddings = self._embed_boxes(boxes)
             sparse_embeddings = torch.cat([sparse_embeddings, box_embeddings], dim=1)
-
+        if text is not None:
+            text_embeddings = self._embed_text(self.text).unsqueeze(0).float()
+            text_embeddings = torch.repeat_interleave(text_embeddings, bs, dim=0)
+            text_embeddings = self.text_conv(text_embeddings)
+            sparse_embeddings = torch.cat([sparse_embeddings, text_embeddings], dim=1)
         if masks is not None:
             dense_embeddings = self._embed_masks(masks)
         else:

@@ -156,7 +156,7 @@ def _build_siamese_sam(encoder_embed_dim,
                 mlp_dim=2048,
                 num_heads=8,
             ),
-            transformer_dim=prompt_embed_dim*2,
+            transformer_dim=prompt_embed_dim,
             iou_head_depth=3,
             iou_head_hidden_dim=256,
         ),
@@ -164,13 +164,4 @@ def _build_siamese_sam(encoder_embed_dim,
         pixel_mean=[86.8950],
         pixel_std=[134.4275],
     )
-    sam.eval()
-    if checkpoint is not None:
-        new_state_dict = {}
-        with open(checkpoint, "rb") as f:
-            state_dict = torch.load(f)        
-            for k, v in state_dict.items():
-                new_k = k.replace('module.', '') if 'module' in k else k
-                new_state_dict[new_k] = v
-        sam.load_state_dict(new_state_dict)
     return sam

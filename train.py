@@ -4,14 +4,15 @@ from tqdm import tqdm
 from segment_anything.build_sam import build_siamese_sam
 from segment_anything.dataloader import MedicalDataset
 from segment_anything.utils import ContrasiveStructureLoss, LaplacianPyramid
+from collections import OrderedDict
 
 
 if __name__ == '__main__':
     epochs = 400
-    batch_size = 8
-    lr = 1e-1
+    batch_size = 2
+    lr = 1e-6
     device = "cuda"
-    checkpoint = None
+    checkpoint = 'model/best/SiameseSAM_epoch80_new.pth'
 
     print('-'*15,'Loading Data','-'*15)
     medical_dataset = MedicalDataset(root='dataset', mod1='CT', mod2='MR-T2')
@@ -32,15 +33,39 @@ if __name__ == '__main__':
     # for name, param in SiameseSAM.named_parameters():
     #     if name in 'mask_decoder':
     #         param.requires_grad = False
+    if checkpoint is None:
+        pretrained_dict = torch.load('sam_vit_b_01ec64.pth')
+        current_state_dict = SiameseSAM.state_dict()
+        # 加载权重时使用 strict=False 参数
 
-    pretrained_dict = torch.load('sam_vit_b_01ec64.pth')
-
-    # 加载权重时使用 strict=False 参数
-    # SiameseSAM.load_state_dict(pretrained_dict, strict=False)
+        skip_weights = [
+        'image_encoder.patch_embed.proj.weight',
+        'prompt_encoder.mask_downscaling.0.weight',
+        'prompt_encoder.mask_downscaling.3.weight',
+        'mask_decoder.mask_tokens.weight'
+        ]
+        new_state_dict = OrderedDict()
+        for name, param in pretrained_dict.items():
+            if name in skip_weights:
+                print(f'Skipping {name} as it is in the skip list')
+                continue
+            if name in current_state_dict:
+                if current_state_dict[name].shape == param.shape:
+                    new_state_dict[name] = param
+                else:
+                    print(f'Skipping {name} due to size mismatch: '
+                        f'{param.shape} (checkpoint) vs {current_state_dict[name].shape} (current model)')
+            else:
+                print(f'Skipping {name} as it is not found in the current model')
+        current_state_dict.update(new_state_dict)
+        SiameseSAM.load_state_dict(current_state_dict, strict=False)
+    for name, param in SiameseSAM.named_parameters():
+        if 'prompt_encoder.clip' in name:
+            param.requires_grad = False
     criterion = ContrasiveStructureLoss(device=device)
     optimizer = torch.optim.Adam(SiameseSAM.parameters(), lr=lr)
     # optimizer = torch.optim.SGD(SiameseSAM.parameters(), lr=lr, momentum=0.9)
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 15, 20, 30, 80], gamma=0.1)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30, 80], gamma=0.1)
 
     print('Finished!')
     print('-'*15,'Training','-'*15)

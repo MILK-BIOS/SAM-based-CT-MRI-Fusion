@@ -44,11 +44,6 @@ class ContrasiveStructureLoss(nn.Module):
 
         # Illumination Loss
         illuminationLoss = self.illumination_loss(merged)
-        # print(ssim_loss_CT)
-        # print(ssim_loss_MRI)
-        # print(classification_loss)
-        # print(0.1 * max(8 - illuminationLoss, 0))
-        # print(2 * max(0.5 - torch.mean(merged), 0))
         loss = ssim_loss_CT + 5 * ssim_loss_MRI + classification_loss + 0.1 * max(8 - illuminationLoss, 0)
         return loss
     

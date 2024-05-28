@@ -211,7 +211,7 @@ class SiameseMaskDecoder(nn.Module):
         self.iou_token = nn.Embedding(1, transformer_dim)
         self.num_mask_tokens = num_multimask_outputs + 1
         self.mask_tokens = nn.Embedding(self.num_mask_tokens, transformer_dim)
-        self.conv = nn.Conv2d(2 * transformer_dim, transformer_dim, kernel_size=1)
+        self.conv = nn.Conv2d(transformer_dim * 2, transformer_dim, kernel_size=1)
 
         self.output_upscaling = nn.Sequential(
             nn.ConvTranspose2d(transformer_dim, transformer_dim // 4, kernel_size=2, stride=2),
