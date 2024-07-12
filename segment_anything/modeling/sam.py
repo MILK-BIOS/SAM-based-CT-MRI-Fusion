@@ -205,12 +205,12 @@ class SiameseSam(nn.Module):
         CT_input, MRI_input = input
         # shortcut = (CT_input + MRI_input) / 2
         input_images_CT = torch.stack([self.preprocess(x) for x in CT_input], dim=0)
-        image_embeddings_CT = self.image_encoder(input_images_CT)
+        image_embeddings_CT, cls_CT = self.image_encoder(input_images_CT)
         input_images_MRI = torch.stack([self.preprocess(x) for x in MRI_input], dim=0)
-        image_embeddings_MRI = self.image_encoder(input_images_MRI)
+        image_embeddings_MRI, cls_MRI = self.image_encoder(input_images_MRI)
         outputs = []
-        cls_input = torch.cat([image_embeddings_CT, image_embeddings_MRI], dim=1)
-        label, cam = self.class_decoder(image_embeddings_CT)
+        cls_input = torch.cat([cls_CT, cls_MRI], dim=1)
+        label, cam = self.class_decoder(cls_input)
         # CT_label, CT_cam = self.class_decoder(image_embeddings_CT)
         # MRI_label, MRI_cam = self.class_decoder(image_embeddings_MRI)
         outputs.append(label)

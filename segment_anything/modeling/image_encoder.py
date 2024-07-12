@@ -450,13 +450,14 @@ class SiameseImageEncoder(nn.Module):
         self.neck = nn.Sequential(
             nn.Conv2d(
                 embed_dim,
-                out_chans,
-                kernel_size=1,
+                embed_dim,
+                kernel_size=3,
+                padding=1,
                 bias=False,
             ),
-            LayerNorm2d(out_chans),
+            LayerNorm2d(embed_dim),
             nn.Conv2d(
-                out_chans,
+                embed_dim,
                 out_chans,
                 kernel_size=3,
                 padding=1,
@@ -472,7 +473,7 @@ class SiameseImageEncoder(nn.Module):
 
         for blk in self.blocks:
             x = blk(x)
-
+        cls_X = x.permute(0, 3, 1, 2)
         x = self.neck(x.permute(0, 3, 1, 2))
 
-        return x
+        return x, cls_X

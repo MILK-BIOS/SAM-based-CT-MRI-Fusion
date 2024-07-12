@@ -12,7 +12,7 @@ if __name__ == '__main__':
     batch_size = 2
     lr = 1e-6
     device = "cuda"
-    checkpoint = 'model/best/SiameseSAM_epoch80_new.pth'
+    checkpoint = 'model/best/SiameseSAM_epoch135.pth'
 
     print('-'*15,'Loading Data','-'*15)
     medical_dataset = MedicalDataset(root='dataset', mod1='CT', mod2='MR-T2')

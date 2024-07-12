@@ -48,16 +48,10 @@ class PromptEncoder(nn.Module):
         self.point_embeddings = nn.ModuleList(point_embeddings)
         self.not_a_point_embed = nn.Embedding(1, embed_dim)
         self.clip, self.preprocess = clip.load("ViT-B/32", device=device)
-        self.text = clip.tokenize(['Image fusion of CT and MRI', 'CT of brain', 'MRI of brain']).to(device)
+        self.text = clip.tokenize(['Image fusion of Computed tomography and Magnetic resonance imaging', 'Computed tomography of brain', 'Magnetic resonance imaging of brain']).to(device)
         self.text_conv = nn.Conv1d(3, 1, kernel_size=3, padding=1, stride=2)
         self.mask_input_size = (4 * image_embedding_size[0], 4 * image_embedding_size[1])
         self.mask_downscaling = nn.Sequential(
-            nn.Conv2d(3, mask_in_chans // 4, kernel_size=2, stride=2),
-            LayerNorm2d(mask_in_chans // 4),
-            activation(),
-            nn.ConvTranspose2d(mask_in_chans // 4, mask_in_chans, kernel_size=2, stride=2),
-            LayerNorm2d(mask_in_chans),
-            activation(),
             nn.Conv2d(mask_in_chans, embed_dim, kernel_size=1),
         )
         self.no_mask_embed = nn.Embedding(1, embed_dim)
